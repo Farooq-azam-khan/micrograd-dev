@@ -34,3 +34,8 @@ def draw_dot(root):
     for n1, n2 in edges:
         dot.edge(str(id(n1)), str(id(n2)) + n2._op)
     return dot
+
+
+def save_graph_as_svg(doc):
+    doc.format = "svg"
+    doc.render("tst")

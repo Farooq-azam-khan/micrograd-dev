@@ -12,38 +12,42 @@ class Value:
         self.grad = 0.0
 
     def backward(self):
+
+        # topological order all of the children in the graph
         topo = []
+        visited = set()
 
         def build_topo(v):
-            visited = set()
             if v not in visited:
                 visited.add(v)
-                for child in list(v._prev):
+                for child in v._prev:
                     build_topo(child)
                 topo.append(v)
-            return topo
 
-        topo = build_topo(self)
+        build_topo(self)
+
+        # go one variable at a time and apply the chain rule to get its gradient
         self.grad = 1.0
         for v in reversed(topo):
             v._backward()
+        return topo
 
     def __repr__(self):
         return f"Value({self.data:.4E})"
 
     def __add__(self, other):
-        other = other if isinstance(other, Value) else Value(other, label=f"{other}")
+        other = other if isinstance(other, Value) else Value(other)
 
         out = Value(
             self.data + other.data,
             _children=(self, other),
             _op="+",
-            label=f"(+ {self.label} {other.label})",
+            label="",  # f"(+ {self.label} {other.label})",
         )
 
         def _backward():
-            self.grad += 1.0 * out.grad
-            other.grad += 1.0 * out.grad
+            self.grad += out.grad
+            other.grad += out.grad
 
         out._backward = _backward
 
@@ -56,12 +60,12 @@ class Value:
         return self + other
 
     def __mul__(self, other):
-        other = other if isinstance(other, Value) else Value(other, label=f"{other}")
+        other = other if isinstance(other, Value) else Value(other)
         out = Value(
             self.data * other.data,
             _children=(self, other),
             _op="*",
-            label=f"(* {self.label} {other.label})",
+            label="",  # f"(* {self.label} {other.label})",
         )
 
         def _backward():
@@ -80,13 +84,16 @@ class Value:
     def __pow__(self, other):  # self**other
         assert isinstance(other, (int, float)), "only supports float and powers"
         out = Value(
-            self.data**other, (self,), _op=f"**{other}", label=f"{self.label}**{other}"
+            self.data**other,
+            (self,),
+            _op=f"**{other}",
+            label="",  # f"{self.label}**{other}"
         )
 
         def _backward():
             self.grad += (other * self.data ** (other - 1)) * out.grad
 
-        self._backward = _backward
+        out._backward = _backward
 
         return out
 
@@ -97,12 +104,12 @@ class Value:
         return self + (-other)
 
     def __rsub__(self, other):  # other - self = -self + other
-        return -self + other
+        return other + (-self)
 
     def exp(self):
         out = Value(
             data=math.exp(self.data),
-            label=f"exp({self.label})",
+            label="",  # f"exp({self.label})",
             _children=(self,),
             _op="exp",
         )
@@ -117,7 +124,7 @@ class Value:
         # https://en.wikipedia.org/wiki/Hyperbolic_functions
         x = self.data
         t = (math.exp(2 * x) - 1) / (math.exp(2 * x) + 1)
-        out = Value(data=t, _children=(self,), _op="tanh", label=f"tanh({self.label})")
+        out = Value(data=t, _children=(self,), _op="tanh", label="")
 
         def _backward():
             self.grad += out.grad * (1 - t**2)

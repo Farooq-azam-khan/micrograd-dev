@@ -32,8 +32,7 @@ class Value:
         return f"Value({self.data:.4E})"
 
     def __add__(self, other):
-        if not isinstance(other, Value):
-            other = Value(other)
+        other = other if isinstance(other, Value) else Value(other, label=f"{other}")
 
         out = Value(
             self.data + other.data,
@@ -50,9 +49,14 @@ class Value:
 
         return out
 
+    def __rmul__(self, other):  # other * self
+        return self * other
+
+    def __radd__(self, other):
+        return self + other
+
     def __mul__(self, other):
-        if not isinstance(other, Value):
-            other = Value(other)
+        other = other if isinstance(other, Value) else Value(other, label=f"{other}")
         out = Value(
             self.data * other.data,
             _children=(self, other),
@@ -67,33 +71,47 @@ class Value:
         out._backward = _backward
         return out
 
-    def __truediv__(self, other):
-        if not isinstance(other, Value):
-            other = Value(other)
-        return Value(
-            self.data / other.data,
-            _children=(self, other),
-            _op="/",
-            label=f"(/ {self.label} {other.label})",
+    def __rtruediv__(self, other):  # other / self = (self**-1) * other
+        return self**-1 * other
+
+    def __truediv__(self, other):  # self / other = self * other**-1
+        return self * other**-1
+
+    def __pow__(self, other):  # self**other
+        assert isinstance(other, (int, float)), "only supports float and powers"
+        out = Value(
+            self.data**other, (self,), _op=f"**{other}", label=f"{self.label}**{other}"
         )
+
+        def _backward():
+            self.grad += (other * self.data ** (other - 1)) * out.grad
+
+        self._backward = _backward
+
+        return out
+
+    def __neg__(self):
+        return self * -1
 
     def __sub__(self, other):
-        if not isinstance(other, Value):
-            other = Value(other)
-        return Value(
-            self.data - other.data,
-            _children=(self, other),
-            _op="-",
-            label=f"(- {self.label} {other.label})",
-        )
+        return self + (-other)
+
+    def __rsub__(self, other):  # other - self = -self + other
+        return -self + other
 
     def exp(self):
-        return Value(
+        out = Value(
             data=math.exp(self.data),
             label=f"exp({self.label})",
             _children=(self,),
             _op="exp",
         )
+
+        def _backward():
+            self.grad += out.grad * out.data
+
+        out._backward = _backward
+        return out
 
     def tanh(self):
         # https://en.wikipedia.org/wiki/Hyperbolic_functions
